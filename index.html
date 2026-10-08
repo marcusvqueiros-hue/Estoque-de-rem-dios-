@@ -34,6 +34,7 @@
   html,body{margin:0;padding:0;}
   body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans',sans-serif;-webkit-font-smoothing:antialiased;min-height:100vh;padding-bottom:calc(150px + env(safe-area-inset-bottom));}
   button,input,select,textarea{font-family:inherit;}
+  .adv{display:none !important;}
   .vh{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0;}
   :focus-visible{outline:3px solid var(--primary);outline-offset:2px;border-radius:6px;}
   .blister{height:14px;background-image:radial-gradient(circle,color-mix(in srgb,var(--primary) 45%,transparent) 2.6px,transparent 2.7px);background-size:18px 14px;background-position:9px 7px;}
@@ -234,17 +235,17 @@
     <form id="medForm" novalidate>
       <input type="hidden" id="f-id">
       <fieldset>
-        <legend>Identificação</legend>
+        <legend>Remédio</legend>
         <div class="field" id="w-nome">
           <label for="f-nome">Nome do remédio <span class="req">*</span></label>
           <input id="f-nome" type="text" placeholder="Ex: Dorflex" autocomplete="off" required>
           <div class="err">Informe o nome do remédio.</div>
         </div>
-        <div class="field">
+        <div class="field adv">
           <label for="f-principio">Princípio ativo</label>
           <input id="f-principio" type="text" placeholder="Ex: dipirona + orfenadrina" autocomplete="off">
         </div>
-        <div class="row2">
+        <div class="row2 adv">
           <div class="field">
             <label for="f-forma">Apresentação</label>
             <select id="f-forma">
@@ -273,7 +274,7 @@
           </div>
           <div class="err">Escolha pelo menos uma categoria.</div>
         </div>
-        <div class="field">
+        <div class="field adv">
           <label for="f-indicacao">Indicação (em poucas palavras)</label>
           <input id="f-indicacao" type="text" placeholder="Ex: dor muscular e tensão" autocomplete="off">
         </div>
@@ -282,11 +283,12 @@
       <fieldset>
         <legend>Validade</legend>
         <div class="field" id="w-validade">
-          <label for="f-validade">Validade da embalagem (mês/ano)</label>
+          <label for="f-validade">Data de validade (mês/ano) <span class="req">*</span></label>
           <input id="f-validade" type="month">
           <div class="hint">Considera o último dia do mês, como impresso na caixa.</div>
+          <div class="err">Informe a validade (mês/ano).</div>
         </div>
-        <div class="row2">
+        <div class="row2 adv">
           <div class="field">
             <label for="f-aberto">Aberto em</label>
             <input id="f-aberto" type="date">
@@ -301,11 +303,11 @@
             </div>
           </div>
         </div>
-        <div class="hint">Xaropes e colírios costumam vencer antes depois de abertos — veja a bula. O app usa a data que vencer primeiro.</div>
+        <div class="hint adv">Xaropes e colírios costumam vencer antes depois de abertos — veja a bula. O app usa a data que vencer primeiro.</div>
         <div class="preview" id="valPreview" aria-live="polite"></div>
       </fieldset>
 
-      <fieldset>
+      <fieldset class="adv">
         <legend>Outras informações</legend>
         <div class="row2">
           <div class="field">
@@ -355,8 +357,8 @@
     </div>
 
     <div class="settings-card">
-      <h3>Seus dados ficam neste aparelho</h3>
-      <p>O que você cadastra fica salvo neste celular. Para levar a lista para outro aparelho (como o da sua esposa), exporte o arquivo e importe no outro.</p>
+      <h3>Lista compartilhada</h3>
+      <p>Quem abrir este mesmo link vê a mesma lista: o que um cadastrar ou excluir aparece para o outro em alguns segundos. Também fica uma cópia neste aparelho, para funcionar sem internet.</p>
       <button class="btn btn-block" id="exportBtn" type="button">Exportar / compartilhar lista</button>
       <button class="btn btn-block" id="importBtn" type="button">Importar lista de um arquivo</button>
       <input type="file" id="importFile" accept="application/json,.json" class="vh" aria-label="Arquivo de lista">
@@ -364,7 +366,7 @@
 
     <div class="settings-card">
       <h3>Restaurar lista original</h3>
-      <p>Volta para os 51 remédios iniciais e apaga os cadastros e edições feitos neste aparelho.</p>
+      <p>Volta para os 51 remédios iniciais e apaga os cadastros e edições para todos que usam o link.</p>
       <button class="btn btn-danger btn-block" id="resetBtn" type="button">Restaurar lista original</button>
     </div>
   </section>
@@ -468,8 +470,8 @@ const SEED = [
 
 function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 function seedMeds(){
-  return SEED.map(([nome,validade,tags,extra]) => Object.assign({
-    id: uid(), nome, principio:'', forma:'', dosagem:'', tags:[...tags], indicacao:'',
+  return SEED.map(([nome,validade,tags,extra],i) => Object.assign({
+    id: 'seed-' + String(i+1).padStart(2,'0'), nome, principio:'', forma:'', dosagem:'', tags:[...tags], indicacao:'',
     validade, aberto:'', dura:'', duraUn:'m', qtd:'', pessoa:'', local:'', receita:false, obs:''
   }, extra||{}));
 }
@@ -488,6 +490,60 @@ function saveMeds(list){
 }
 let MEDS = loadMeds();
 try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
+
+
+/* ================= Sincronização (compartilhada entre aparelhos) ================= */
+const SB_URL = 'https://ejftbemioalcobkykgvj.supabase.co/rest/v1/meds';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVqZnRiZW1pb2FsY29ia3lrZ3ZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE0OTc2MzksImV4cCI6MjEwNzA3MzYzOX0.kfdGkii_YVM2DdONFTZqLzGCWHExPOEaKFmPA22m1Z0';
+const SB_H = {apikey:SB_KEY, Authorization:'Bearer '+SB_KEY, 'Content-Type':'application/json'};
+const OUT_KEY = 'armario-outbox', MIG_KEY = 'armario-migrated-v1';
+let syncState = 'pending', flushing = false;
+function getOutbox(){ try{ return JSON.parse(localStorage.getItem(OUT_KEY) || '[]'); }catch(e){ return []; } }
+function setOutbox(o){ try{ localStorage.setItem(OUT_KEY, JSON.stringify(o)); }catch(e){} }
+function queueOp(op){ op.ts = Date.now() + Math.random(); setOutbox([...getOutbox().filter(x => x.id !== op.id), op]); flush(); }
+function dataOf(m){ const d = Object.assign({}, m); delete d.id; return d; }
+async function flush(){
+  if(flushing) return false; flushing = true;
+  try{
+    for(const op of getOutbox()){
+      const r = op.type === 'up'
+        ? await fetch(SB_URL + '?on_conflict=id', {method:'POST', headers:Object.assign({Prefer:'resolution=merge-duplicates,return=minimal'}, SB_H), body:JSON.stringify({id:op.id, data:dataOf(op.med), updated_at:new Date().toISOString()})})
+        : await fetch(SB_URL + '?id=eq.' + encodeURIComponent(op.id), {method:'DELETE', headers:SB_H});
+      if(!r.ok) throw new Error('http ' + r.status);
+      setOutbox(getOutbox().filter(x => x.ts !== op.ts));
+    }
+    return true;
+  }catch(e){ return false; }
+  finally{ flushing = false; }
+}
+function setSync(state){ syncState = state; updateClock(); }
+async function pull(){
+  try{
+    if(!(await flush())){ setSync('offline'); return; }
+    const r = await fetch(SB_URL + '?select=id,data&order=id', {headers:SB_H});
+    if(!r.ok) throw new Error('http ' + r.status);
+    const rows = await r.json();
+    const remote = rows.map(x => Object.assign({}, x.data, {id:x.id}));
+    // migração única: leva para a nuvem o que já estava só neste aparelho
+    let migrated = false; try{ migrated = localStorage.getItem(MIG_KEY) === '1'; }catch(e){}
+    if(!migrated){
+      const ids = new Set(remote.map(m => m.id)), names = new Set(remote.map(m => norm(m.nome)));
+      let any = false;
+      MEDS.forEach(m => { if(!ids.has(m.id) && !names.has(norm(m.nome))){ queueOp({type:'up', id:m.id, med:m}); any = true; } });
+      try{ localStorage.setItem(MIG_KEY, '1'); }catch(e){}
+      if(any){ setTimeout(pull, 800); setSync('ok'); return; }
+    }
+    if(getOutbox().length){ setSync('ok'); return; }   // mudança feita durante a leitura: não sobrescrever
+    if(JSON.stringify(remote) !== JSON.stringify(MEDS)){ MEDS = remote; saveMeds(MEDS); renderList(); }
+    setSync('ok');
+  }catch(e){ setSync('offline'); }
+}
+function replaceAll(newList){
+  const keep = new Set(newList.map(m => m.id));
+  MEDS.forEach(m => { if(!keep.has(m.id)) queueOp({type:'del', id:m.id}); });
+  newList.forEach(m => queueOp({type:'up', id:m.id, med:m}));
+  MEDS = newList; saveMeds(MEDS);
+}
 
 /* ================= Datas (horário de Brasília) ================= */
 function todayBrasilia(){
@@ -588,7 +644,8 @@ $('themeToggle').addEventListener('click', ()=>{
 function updateClock(){
   const now = new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).format(new Date());
   $('clock').textContent = `Horário de Brasília: ${now}`;
-  $('footerNote').textContent = `Validades conferidas em ${now} (horário de Brasília).`;
+  const st = syncState === 'ok' ? ' · ☁ Sincronizado' : syncState === 'offline' ? ' · ⚠ Sem conexão — alterações serão enviadas depois' : '';
+  $('footerNote').textContent = `Validades conferidas em ${now} (horário de Brasília).${st}`;
   const t = todayBrasilia();
   if(t.getTime() !== TODAY.getTime()){ TODAY = t; renderList(); }
 }
@@ -740,12 +797,13 @@ function updatePreview(){
   p.innerHTML = `<span>Vale até <b>${esc(st.exp.src==='open' ? fmtD(st.exp.date) : fmtMY(d.validade))}</b>${st.exp.src==='open' ? ' (após aberto)' : ''}${dt ? ' · '+esc(dt) : ''}</span><span class="badge b-${st.key}">${statusLabel[st.key]}</span>`;
 }
 ['validade','aberto','dura','dura-un'].forEach(k => F(k).addEventListener('input', updatePreview));
+F('validade').addEventListener('input', ()=>{ if(F('validade').value) $('w-validade').classList.remove('invalid'); });
 F('nome').addEventListener('input', ()=>{ if(F('nome').value.trim()) $('w-nome').classList.remove('invalid'); });
 
 function openForm(id){
   const m = id ? MEDS.find(x => x.id === id) : null;
   $('medForm').reset();
-  ['w-nome','w-cats'].forEach(w => $(w).classList.remove('invalid'));
+  ['w-nome','w-cats','w-validade'].forEach(w => $(w).classList.remove('invalid'));
   F('id').value = m ? m.id : '';
   if(m){
     F('nome').value = m.nome; F('principio').value = m.principio||''; F('forma').value = m.forma||''; F('dosagem').value = m.dosagem||'';
@@ -765,11 +823,15 @@ $('medForm').addEventListener('submit', e => {
   const d = formDraft(); let ok = true;
   if(!d.nome){ $('w-nome').classList.add('invalid'); ok = false; }
   if(!d.tags.length){ $('w-cats').classList.add('invalid'); ok = false; }
+  const hasOpen = d.aberto && Number(d.dura) > 0;
+  if(!d.validade && !hasOpen){ $('w-validade').classList.add('invalid'); ok = false; }
   if(!ok){ const first = document.querySelector('.invalid'); first.scrollIntoView({behavior:'smooth', block:'center'}); if(!d.nome) F('nome').focus(); return; }
   const id = F('id').value;
-  if(id){ MEDS = MEDS.map(m => m.id === id ? Object.assign({}, m, d) : m); }
-  else { MEDS = [...MEDS, Object.assign({id:uid()}, d)]; }
+  let medSaved;
+  if(id){ medSaved = Object.assign({}, MEDS.find(m => m.id === id), d); MEDS = MEDS.map(m => m.id === id ? medSaved : m); }
+  else { medSaved = Object.assign({id:uid()}, d); MEDS = [...MEDS, medSaved]; }
   const saved = saveMeds(MEDS);
+  queueOp({type:'up', id:medSaved.id, med:medSaved});
   toast(saved ? (id ? 'Alterações salvas' : `${d.nome} cadastrado`) : 'Salvo só nesta sessão — o navegador bloqueou o armazenamento');
   activeCat = 'Todos'; activeStatus = null; searchTerm = ''; $('search').value = '';
   renderList(); showView('list');
@@ -778,7 +840,7 @@ $('formCancel').addEventListener('click', ()=>showView('list'));
 function deleteMed(id){
   const m = MEDS.find(x=>x.id===id); if(!m) return;
   if(!confirm(`Excluir “${m.nome}” da lista? Use quando o remédio acabou.`)) return;
-  MEDS = MEDS.filter(x => x.id !== id); saveMeds(MEDS);
+  MEDS = MEDS.filter(x => x.id !== id); saveMeds(MEDS); queueOp({type:'del', id});
   toast(`${m.nome} excluído`); renderList(); showView('list');
 }
 $('formDelete').addEventListener('click', ()=>deleteMed(F('id').value));
@@ -803,13 +865,13 @@ $('importFile').addEventListener('change', async e => {
     const list = Array.isArray(data) ? data : data.remedios;
     if(!Array.isArray(list) || !list.every(m => m && typeof m.nome === 'string' && Array.isArray(m.tags))) throw new Error();
     if(!confirm(`Substituir a lista atual por ${list.length} remédio(s) do arquivo?`)) return;
-    MEDS = list.map(m => Object.assign({id:uid()}, m)); saveMeds(MEDS); renderList(); toast('Lista importada'); showView('list');
+    replaceAll(list.map(m => Object.assign({id:uid()}, m, {id:m.id || uid()}))); renderList(); toast('Lista importada'); showView('list');
   }catch(err){ toast('Arquivo inválido — use um arquivo exportado pelo app'); }
   finally{ e.target.value = ''; }
 });
 $('resetBtn').addEventListener('click', ()=>{
-  if(!confirm('Restaurar os 51 remédios originais? Cadastros e edições deste aparelho serão apagados.')) return;
-  MEDS = seedMeds(); saveMeds(MEDS); clearFilters(); toast('Lista original restaurada'); showView('list');
+  if(!confirm('Restaurar os 51 remédios originais? Cadastros e edições serão apagados para TODOS que usam o link.')) return;
+  replaceAll(seedMeds()); clearFilters(); toast('Lista original restaurada'); showView('list');
 });
 
 /* ================= PWA ================= */
@@ -842,6 +904,9 @@ if(isStandalone()) $('installStatus').textContent = 'O app já está instalado n
 /* ================= Início ================= */
 updateClock(); setInterval(updateClock, 30000);
 renderList();
+pull(); setInterval(pull, 15000);
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) pull(); });
+window.addEventListener('online', pull);
 if(new URLSearchParams(location.search).get('tab') === 'form') openForm(null);
 </script>
 </body>
