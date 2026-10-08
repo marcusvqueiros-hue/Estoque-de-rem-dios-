@@ -1,0 +1,22 @@
+{
+  "id": "/",
+  "name": "Armário — Meus Remédios",
+  "short_name": "Armário",
+  "description": "Remédios de casa organizados por sintoma, com validade e cadastro",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F5F8F6",
+  "theme_color": "#1F6F5C",
+  "lang": "pt-BR",
+  "categories": ["health", "medical", "lifestyle"],
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Cadastrar remédio", "short_name": "Cadastrar", "url": "/?tab=form", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
