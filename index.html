@@ -171,6 +171,13 @@
 
   .toast{position:fixed;left:50%;bottom:calc(92px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);background:var(--ink);color:var(--bg);padding:11px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:all .2s ease;z-index:60;max-width:calc(100% - 32px);}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+  .toast{display:flex;align-items:center;gap:14px;}
+  .toast.has-act{pointer-events:auto;}
+  .toast button{border:0;background:transparent;color:var(--primary-tint);font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:.04em;cursor:pointer;padding:4px 2px;}
+  .hist-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden;}
+  .hist-body{padding:12px 14px;}
+  .hist-when{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--ink-soft);margin:2px 0 0;}
+  .hist-item .card-actions button:first-child{color:var(--primary);}
 </style>
 </head>
 <body>
@@ -341,6 +348,13 @@
   </section>
 
   <!-- AJUSTES -->
+  <section class="view" id="view-history" aria-labelledby="histTitle">
+    <h2 class="form-title" id="histTitle">Histórico</h2>
+    <p class="form-sub">Remédios excluídos. Toque em Restaurar se apagou por engano — volta para a lista de todos.</p>
+    <div id="histList"></div>
+    <div class="empty" id="histEmpty"><div class="empty-title">Nada excluído</div><div>Quando excluir um remédio, ele aparece aqui.</div></div>
+  </section>
+
   <section class="view" id="view-settings" aria-labelledby="setTitle">
     <h2 class="form-title" id="setTitle">Ajustes</h2>
     <p class="form-sub">Instalação do app e cópia de segurança.</p>
@@ -382,6 +396,9 @@
     <button class="tab" role="tab" data-view="form" aria-selected="false" aria-controls="view-form" type="button">
       <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg></span>Cadastrar
     </button>
+    <button class="tab" role="tab" data-view="history" aria-selected="false" aria-controls="view-history" type="button">
+      <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg></span>Histórico
+    </button>
     <button class="tab" role="tab" data-view="settings" aria-selected="false" aria-controls="view-settings" type="button">
       <span class="pill"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span>Ajustes
     </button>
@@ -407,7 +424,7 @@
 
 <button class="fab" id="fab" type="button" aria-label="Cadastrar novo remédio"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Novo remédio</button>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"><span id="toastMsg"></span><button type="button" id="toastAct" hidden></button></div>
 
 <script>
 /* ================= Dados ================= */
@@ -489,6 +506,7 @@ function saveMeds(list){
   try{ localStorage.setItem(STORE_KEY, JSON.stringify(list)); return true; }catch(e){ return false; }
 }
 let MEDS = loadMeds();
+const activeMeds = () => MEDS.filter(m => !m.excluidoEm);
 try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
 
 
@@ -534,7 +552,7 @@ async function pull(){
       if(any){ setTimeout(pull, 800); setSync('ok'); return; }
     }
     if(getOutbox().length){ setSync('ok'); return; }   // mudança feita durante a leitura: não sobrescrever
-    if(JSON.stringify(remote) !== JSON.stringify(MEDS)){ MEDS = remote; saveMeds(MEDS); renderList(); }
+    if(JSON.stringify(remote) !== JSON.stringify(MEDS)){ MEDS = remote; saveMeds(MEDS); renderList(); renderHistory(); }
     setSync('ok');
   }catch(e){ setSync('offline'); }
 }
@@ -624,12 +642,17 @@ const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function allCategories(){
   const counts = {};
-  MEDS.forEach(m => m.tags.forEach(t => counts[t] = (counts[t]||0)+1));
+  activeMeds().forEach(m => m.tags.forEach(t => counts[t] = (counts[t]||0)+1));
   return counts;
 }
-function toast(msg){
-  const t = $('toast'); t.textContent = msg; t.classList.add('show');
-  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), 2400);
+function toast(msg, actLabel, actFn){
+  const t = $('toast'), b = $('toastAct');
+  $('toastMsg').textContent = msg;
+  b.hidden = !actLabel; t.classList.toggle('has-act', !!actLabel);
+  b.textContent = actLabel || '';
+  b.onclick = actFn ? ()=>{ t.classList.remove('show'); actFn(); } : null;
+  t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(()=>t.classList.remove('show'), actLabel ? 6000 : 2400);
 }
 
 /* ================= Tema e relógio ================= */
@@ -658,7 +681,8 @@ function showView(v){
   document.querySelectorAll('.tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.view === v)));
   $('searchBlock').style.display = v === 'list' ? '' : 'none';
   $('fab').hidden = v !== 'list';
-  $('pageTitle').textContent = v === 'list' ? 'O que eu tenho em casa' : v === 'form' ? 'Cadastro' : 'Ajustes';
+  $('pageTitle').textContent = v === 'list' ? 'O que eu tenho em casa' : v === 'form' ? 'Cadastro' : v === 'history' ? 'Histórico' : 'Ajustes';
+  if(v === 'history') renderHistory();
   window.scrollTo(0,0);
 }
 document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', ()=>{
@@ -694,7 +718,7 @@ function renderActiveFilters(){
 function clearFilters(){ activeCat='Todos'; activeStatus=null; searchTerm=''; $('search').value=''; renderList(); }
 
 function renderList(){
-  const base = MEDS.filter(m => (activeCat === 'Todos' || m.tags.includes(activeCat)) && matches(searchTerm, m));
+  const base = activeMeds().filter(m => (activeCat === 'Todos' || m.tags.includes(activeCat)) && matches(searchTerm, m));
   renderStats(base);
   renderActiveFilters();
   let list = base.filter(m => !activeStatus || statusOf(m).key === activeStatus);
@@ -737,7 +761,7 @@ let lastFocus = null;
 function renderCatChips(){
   const counts = allCategories();
   const cats = Object.keys(counts).sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  $('catChips').innerHTML = [['Todos', MEDS.length], ...cats.map(c=>[c,counts[c]])].map(([c,n]) =>
+  $('catChips').innerHTML = [['Todos', activeMeds().length], ...cats.map(c=>[c,counts[c]])].map(([c,n]) =>
     `<button class="chip" type="button" data-cat="${esc(c)}" aria-pressed="${c===activeCat}">${esc(c)}<span class="count">${n}</span></button>`).join('');
   $('catChips').querySelectorAll('.chip').forEach(b => b.addEventListener('click', ()=>{ activeCat = b.dataset.cat; renderCatChips(); renderList(); }));
 }
@@ -837,18 +861,51 @@ $('medForm').addEventListener('submit', e => {
   renderList(); showView('list');
 });
 $('formCancel').addEventListener('click', ()=>showView('list'));
+function updateMed(id, fn){
+  let changed = null;
+  MEDS = MEDS.map(m => { if(m.id !== id) return m; changed = fn(Object.assign({}, m)); return changed; });
+  if(changed){ saveMeds(MEDS); queueOp({type:'up', id, med:changed}); }
+  return changed;
+}
 function deleteMed(id){
   const m = MEDS.find(x=>x.id===id); if(!m) return;
-  if(!confirm(`Excluir “${m.nome}” da lista? Use quando o remédio acabou.`)) return;
+  if(!confirm(`Excluir “${m.nome}” da lista? Ele vai para o Histórico e pode ser restaurado.`)) return;
+  updateMed(id, x => Object.assign(x, {excluidoEm:new Date().toISOString()}));
+  renderList(); renderHistory(); showView('list');
+  toast(`${m.nome} excluído`, 'Desfazer', ()=>restoreMed(id));
+}
+function restoreMed(id){
+  const m = updateMed(id, x => { delete x.excluidoEm; return x; });
+  if(m){ renderList(); renderHistory(); toast(`${m.nome} restaurado`); }
+}
+function purgeMed(id){
+  const m = MEDS.find(x=>x.id===id); if(!m) return;
+  if(!confirm(`Apagar “${m.nome}” de vez? Não dá para desfazer.`)) return;
   MEDS = MEDS.filter(x => x.id !== id); saveMeds(MEDS); queueOp({type:'del', id});
-  toast(`${m.nome} excluído`); renderList(); showView('list');
+  renderHistory(); toast(`${m.nome} apagado de vez`);
+}
+const fmtDT = iso => new Date(iso).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo',day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+function renderHistory(){
+  const list = MEDS.filter(m => m.excluidoEm).sort((a,b) => b.excluidoEm.localeCompare(a.excluidoEm));
+  $('histEmpty').style.display = list.length ? 'none' : 'block';
+  $('histList').innerHTML = list.map(m => {
+    const st = statusOf(m);
+    return `<article class="hist-item"><div class="hist-body">
+      <p class="card-name">${esc(m.nome)}</p>
+      <div class="card-tags" style="margin-bottom:6px">${m.tags.map(t=>`<span class="tag-pill">${esc(t)}</span>`).join('')}</div>
+      <span class="validade">Validade: <b>${esc(validadeText(m, st))}</b></span>
+      <p class="hist-when">Excluído em ${esc(fmtDT(m.excluidoEm))}</p></div>
+      <div class="card-actions"><button type="button" data-restore="${esc(m.id)}">Restaurar</button><button type="button" data-purge="${esc(m.id)}">Apagar de vez</button></div></article>`;
+  }).join('');
+  $('histList').querySelectorAll('[data-restore]').forEach(b => b.addEventListener('click', ()=>restoreMed(b.dataset.restore)));
+  $('histList').querySelectorAll('[data-purge]').forEach(b => b.addEventListener('click', ()=>purgeMed(b.dataset.purge)));
 }
 $('formDelete').addEventListener('click', ()=>deleteMed(F('id').value));
 $('fab').addEventListener('click', ()=>openForm(null));
 
 /* ================= Backup ================= */
 $('exportBtn').addEventListener('click', async ()=>{
-  const json = JSON.stringify({app:'armario-remedios', versao:2, exportadoEm:new Date().toISOString(), remedios:MEDS}, null, 2);
+  const json = JSON.stringify({app:'armario-remedios', versao:2, exportadoEm:new Date().toISOString(), remedios:activeMeds()}, null, 2);
   const name = `armario-remedios-${new Date().toISOString().slice(0,10)}.json`;
   const file = new File([json], name, {type:'application/json'});
   try{
